@@ -15,15 +15,41 @@ class _TimetableFormState extends State<TimetableForm> {
   Map<String, TextEditingController> controllers = {
     'course': TextEditingController(),
     'teacher': TextEditingController(),
-    'day': TextEditingController(),
     'room': TextEditingController(),
     'startTime': TextEditingController(),
     'endTime': TextEditingController(),
     'color': TextEditingController(),
   };
+  final List<String> daysOfWeek = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  Map<String, String> dropDownVariables = {'day': 'Monday'};
 
   late final TimeTable tt;
   late final Map<String, List<String>> options;
+
+  TimeOfDay? startTime;
+  TimeOfDay? endTime;
+
+  final Map<String, Color> colorOptions = {
+    'Red': Colors.red,
+    'Green': Colors.green,
+    'Blue': Colors.blue,
+    'Orange': Colors.orange,
+    'Purple': Colors.purple,
+    'Teal': Colors.teal,
+    'Amber': Colors.amber,
+    'Pink': Colors.pink,
+    'Brown': Colors.brown,
+  };
+  String selectedColorName = 'Red';
 
   @override
   void initState() {
@@ -34,27 +60,33 @@ class _TimetableFormState extends State<TimetableForm> {
   }
 
   void onSave() {
-    final course = controllers['course']!.text;
-    final teacher = controllers['teacher']!.text;
-    final day = controllers['day']!.text;
-    final room = controllers['room']!.text;
-    // final startTime = int.tryParse(controllers['startTime']!.text) ?? 0;
-    // final endTime = int.tryParse(controllers['endTime']!.text) ?? 0;
-    // final color = controllers['color']!.text;
+    String capitalize(String s) =>
+        s.isNotEmpty ? s[0].toUpperCase() + s.substring(1).toLowerCase() : s;
+
+    final course = capitalize(controllers['course']!.text.trim());
+    final teacher = capitalize(controllers['teacher']!.text.trim());
+    final room = capitalize(controllers['room']!.text.trim());
+    final int? startMinutes =
+        startTime != null ? startTime!.hour * 60 + startTime!.minute : null;
+    final int? endMinutes =
+        endTime != null ? endTime!.hour * 60 + endTime!.minute : null;
+    final color = colorOptions[selectedColorName]!;
+    final colorHex =
+        '#${color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
 
     if (course.isNotEmpty &&
         teacher.isNotEmpty &&
-        day.isNotEmpty &&
-        room.isNotEmpty) {
+        room.isNotEmpty &&
+        startMinutes != null &&
+        endMinutes != null) {
       tt.addEntry(
         course,
         teacher,
-        day,
+        dropDownVariables['day']!,
         room,
-        //  startTime, endTime, color
-        0,
-        10,
-        '#FF5733',
+        startMinutes,
+        endMinutes,
+        colorHex,
       );
       Navigator.pop(context);
     } else {
@@ -64,15 +96,45 @@ class _TimetableFormState extends State<TimetableForm> {
     }
   }
 
+  Widget buildDropdown({
+    required String label,
+    required List<String> options,
+    required String selectedValue,
+  }) {
+    // adding label
+    return InputDecorator(
+      decoration: InputDecoration(labelText: label),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedValue,
+          items:
+              options.map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+          onChanged: (String? newValue) {
+            setState(() {
+              if (label == 'Day') {
+                dropDownVariables['day'] = newValue!;
+              } else {
+                selected[label] = newValue!;
+                controllers[label]!.text = newValue;
+              }
+            });
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Timetable Entry'),
-        actions: [IconButton(icon: const Icon(Icons.save), onPressed: onSave)],
-      ),
+      appBar: AppBar(title: const Text('Add Timetable Entry')),
       body: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           spacing: 4.0,
           children: [
@@ -86,15 +148,103 @@ class _TimetableFormState extends State<TimetableForm> {
               controller: controllers['teacher']!,
               options: options['teacher']!,
             ),
-            ComboboxField(
+            buildDropdown(
               label: 'Day',
-              controller: controllers['day']!,
-              options: options['day']!,
+              options: daysOfWeek,
+              selectedValue: dropDownVariables['day']!,
             ),
             ComboboxField(
               label: 'Room',
               controller: controllers['room']!,
               options: options['room']!,
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: startTime ?? TimeOfDay(hour: 8, minute: 0),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          startTime = picked;
+                        });
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: InputDecoration(labelText: 'Start Time'),
+                      child: Text(
+                        startTime != null
+                            ? startTime!.format(context)
+                            : 'Select Time',
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8.0),
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: endTime ?? TimeOfDay(hour: 9, minute: 0),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          endTime = picked;
+                        });
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: InputDecoration(labelText: 'End Time'),
+                      child: Text(
+                        endTime != null
+                            ? endTime!.format(context)
+                            : 'Select Time',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: selectedColorName,
+              decoration: const InputDecoration(labelText: 'Color'),
+              items:
+                  colorOptions.entries.map((entry) {
+                    return DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: entry.value,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.black12),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(entry.key),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+              onChanged: (colorName) {
+                setState(() {
+                  selectedColorName = colorName!;
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: onSave,
+              child: const Text('Save'),
+              style: ElevatedButton.styleFrom(minimumSize: Size.fromHeight(48)),
             ),
           ],
         ),
