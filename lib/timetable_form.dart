@@ -243,8 +243,8 @@ class _TimetableFormState extends State<TimetableForm> {
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: onSave,
-              child: const Text('Save'),
               style: ElevatedButton.styleFrom(minimumSize: Size.fromHeight(48)),
+              child: const Text('Save'),
             ),
           ],
         ),

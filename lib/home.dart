@@ -83,16 +83,90 @@ class _StateHome extends State<Home> {
   }
 
   Widget courseEntry(entry) {
-    // return ListView.builder(
-    // itemCount: entries.length,
-    // itemBuilder: (context, index) {
-    //   final entry = entries[index];
+    String formatTime(dynamic value) {
+      if (value is int) {
+        final hour = value ~/ 60;
+        final minute = value % 60;
+        final time = TimeOfDay(hour: hour, minute: minute);
+        return time.format(context);
+      } else if (value is String && int.tryParse(value) != null) {
+        final intVal = int.parse(value);
+        final hour = intVal ~/ 60;
+        final minute = intVal % 60;
+        final time = TimeOfDay(hour: hour, minute: minute);
+        return time.format(context);
+      }
+      return value.toString();
+    }
+
+    Widget etaWidget(entry) {
+      int? start =
+          entry['startTime'] is int
+              ? entry['startTime']
+              : int.tryParse(entry['startTime'].toString());
+      int? end =
+          entry['endTime'] is int
+              ? entry['endTime']
+              : int.tryParse(entry['endTime'].toString());
+      if (start == null || end == null) return SizedBox.shrink();
+      return StreamBuilder<DateTime>(
+        stream: Stream.periodic(
+          const Duration(seconds: 30),
+          (_) => DateTime.now(),
+        ),
+        initialData: DateTime.now(),
+        builder: (context, snapshot) {
+          final now = snapshot.data!;
+          final nowMinutes = now.hour * 60 + now.minute;
+          final untilStart = start - nowMinutes;
+          final untilEnd = end - nowMinutes;
+          if (untilStart > 0 && untilStart <= 60) {
+            // 60 min or less to start
+            return Text(
+              'ETA: $untilStart min',
+              style: TextStyle(
+                color: Colors.green,
+                fontWeight: FontWeight.bold,
+              ),
+            );
+          } else if (untilStart <= 0 && untilEnd > 0 && untilEnd <= 60) {
+            // 60 min or less to end
+            return Text(
+              'ETA: $untilEnd min',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            );
+          } else if (untilStart > -60 && untilStart < 0) {
+            // Under 60 min have passed since start
+            return Text(
+              'ETA: ...',
+              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+            );
+          } else {
+            return SizedBox.shrink();
+          }
+        },
+      );
+    }
+
     return Card(
       child: ListTile(
         title: Text(entry['course']),
-        subtitle: Text(
-          'Teacher: ${entry['teacher']} | Room: ${entry['room']}\n'
-          'Starts at: ${entry['startTime']} Ends at: ${entry['endTime']}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Teacher: ${entry['teacher']}'),
+            Text('Room: ${entry['room']}'),
+            Row(
+              children: [
+                Text(
+                  'Time: ${formatTime(entry['startTime'])} - ${formatTime(entry['endTime'])}',
+                ),
+                const SizedBox(width: 8),
+                etaWidget(entry),
+              ],
+            ),
+          ],
         ),
         trailing: Container(
           width: 10,
@@ -103,8 +177,6 @@ class _StateHome extends State<Home> {
         ),
       ),
     );
-    //   },
-    // );
   }
 
   Widget floatingButton() {
