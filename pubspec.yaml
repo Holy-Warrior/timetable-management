@@ -1,7 +1,7 @@
 name: timetable
 description: "A new Flutter project."
 publish_to: 'none'
-version: 0.1.0
+version: 1.2.0
 
 environment:
   sdk: ^3.7.2
@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   shared_preferences: ^2.2.0
   flutter_colorpicker: ^1.0.3
+  http: ^1.2.1
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

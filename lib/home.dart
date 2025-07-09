@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:timetable/common_data.dart';
 import 'package:timetable/timetable_controller.dart';
 import 'package:timetable/timetable_form.dart';
+import 'package:timetable/widget_git_release_checker.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -215,6 +217,12 @@ class _StateHome extends State<Home> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            WidgetGitReleaseChecker(
+              user: 'Holy-Warrior',
+              repo: 'timetable-management',
+              currentRelease: currentRelease,
+              filterOutPreRelease: false,
+            ),
             if (timeTable.status == 'empty')
               Center(child: Text('No timetable data yet.'))
             else ...[
