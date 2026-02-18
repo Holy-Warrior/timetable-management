@@ -222,6 +222,7 @@ class _StateHome extends State<Home> {
               repo: 'timetable-management',
               currentRelease: currentRelease,
               filterOutPreRelease: false,
+              showLoading: false,
             ),
             if (timeTable.status == 'empty')
               Center(child: Text('No timetable data yet.'))
