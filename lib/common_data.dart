@@ -1,1 +1,1 @@
-String currentRelease = 'v1.2.0';
+String currentRelease = 'v1.3.0';
