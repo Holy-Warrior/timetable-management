@@ -7,15 +7,10 @@ import 'package:timetable/common_data.dart';
 import 'package:timetable/settings_screen.dart';
 import 'package:provider/provider.dart';
 
-class Home extends StatefulWidget {
+class Home extends StatelessWidget {
   const Home({super.key});
 
-  @override
-  State<Home> createState() => _HomeState();
-}
-
-class _HomeState extends State<Home> {
-  String _formatTime(int minutes) {
+  String _formatTime(BuildContext context, int minutes) {
     final hour = minutes ~/ 60;
     final minute = minutes % 60;
     final time = TimeOfDay(hour: hour, minute: minute);
@@ -85,11 +80,11 @@ class _HomeState extends State<Home> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    _formatTime(entry.startTime),
+                    _formatTime(context, entry.startTime),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    _formatTime(entry.endTime),
+                    _formatTime(context, entry.endTime),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   _buildETA(entry),

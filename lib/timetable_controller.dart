@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:timetable/models/timetable_model.dart';
 import 'package:timetable/shared_memory.dart';
 import 'package:timetable/services/notification_service.dart';
@@ -66,6 +67,27 @@ class TimeTable extends ChangeNotifier {
     _themeMode = mode;
     await sharedMemory('themeMode', mode.index);
     notifyListeners();
+  }
+
+  Future<String> exportData() async {
+    final List<Map<String, dynamic>> data = _courses.map((c) => c.toJson()).toList();
+    return jsonEncode(data);
+  }
+
+  Future<void> importData(String jsonString) async {
+    try {
+      final dynamic data = jsonDecode(jsonString);
+      if (data is List) {
+        _courses = data.map((e) => Course.fromJson(Map<String, dynamic>.from(e))).toList();
+        status = _courses.isEmpty ? 'empty' : 'ready';
+        await _saveData();
+        _rescheduleAllNotifications();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Import error: $e');
+      rethrow;
+    }
   }
 
   void addOrUpdateEntry({
