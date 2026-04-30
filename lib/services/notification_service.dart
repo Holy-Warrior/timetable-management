@@ -24,7 +24,7 @@ class NotificationService {
     }
     
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('app_icon');
 
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
@@ -78,12 +78,13 @@ class NotificationService {
       scheduledDate,
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'timetable_channel',
-          'Timetable Notifications',
-          channelDescription: 'Notifications for upcoming classes',
+          'class_alerts',
+          'Class Alerts',
+          channelDescription: 'Reminders for your upcoming classes',
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
+          sound: RawResourceAndroidNotificationSound('notification_sound'),
         ),
         iOS: DarwinNotificationDetails(),
       ),

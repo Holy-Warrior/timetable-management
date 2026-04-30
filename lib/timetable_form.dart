@@ -71,12 +71,6 @@ class _TimetableFormState extends State<TimetableForm> {
       final startMin = _startTime!.hour * 60 + _startTime!.minute;
       final endMin = _endTime!.hour * 60 + _endTime!.minute;
 
-      if (endMin <= startMin) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('End time must be after start time')),
-        );
-        return;
-      }
 
       final entry = TimetableEntry(
         id: widget.entryToEdit?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),

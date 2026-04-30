@@ -8,10 +8,12 @@ class TimeTable extends ChangeNotifier {
   String status = 'loading';
   bool _notificationsEnabled = true;
   int _notificationOffset = 10;
+  ThemeMode _themeMode = ThemeMode.light;
 
   List<Course> get courses => _courses;
   bool get notificationsEnabled => _notificationsEnabled;
   int get notificationOffset => _notificationOffset;
+  ThemeMode get themeMode => _themeMode;
 
   TimeTable() {
     _loadData();
@@ -36,6 +38,9 @@ class TimeTable extends ChangeNotifier {
     final offset = await sharedMemory('notificationOffset');
     _notificationOffset = offset is int ? offset : 10;
 
+    final themeIdx = await sharedMemory('themeMode');
+    _themeMode = themeIdx is int ? ThemeMode.values[themeIdx] : ThemeMode.light;
+
     notifyListeners();
   }
 
@@ -54,6 +59,12 @@ class TimeTable extends ChangeNotifier {
     _notificationOffset = offset;
     await sharedMemory('notificationOffset', offset);
     _rescheduleAllNotifications();
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
+    await sharedMemory('themeMode', mode.index);
     notifyListeners();
   }
 

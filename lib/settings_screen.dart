@@ -54,6 +54,27 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+              Card(
+                child: ListTile(
+                  title: const Text('Appearance'),
+                  subtitle: const Text('Change the app theme'),
+                  trailing: DropdownButton<ThemeMode>(
+                    value: tt.themeMode,
+                    underline: const SizedBox(),
+                    items: const [
+                      DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
+                      DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+                      DropdownMenuItem(value: ThemeMode.system, child: Text('Automatic')),
+                    ],
+                    onChanged: (ThemeMode? newValue) {
+                      if (newValue != null) {
+                        tt.setThemeMode(newValue);
+                      }
+                    },
+                  ),
+                ),
+              ),
             ],
           );
         },

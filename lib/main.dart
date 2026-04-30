@@ -20,10 +20,12 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Timetable Pro',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
+    return Consumer<TimeTable>(
+      builder: (context, tt, _) {
+        return MaterialApp(
+          title: 'My Schedules',
+          debugShowCheckedModeBanner: false,
+          themeMode: tt.themeMode,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -75,6 +77,8 @@ class MainApp extends StatelessWidget {
         ),
       ),
       home: const Home(),
+        );
+      },
     );
   }
 }

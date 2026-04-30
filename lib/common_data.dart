@@ -1,1 +1,3 @@
-String currentRelease = 'v1.3.0';
+String currentRelease = 'v2.0.0';
+String githubUserName = 'Holy-Warrior';
+String githubRepoName = 'timetable-management';

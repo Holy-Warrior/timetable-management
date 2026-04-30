@@ -36,12 +36,13 @@ class _HomeState extends State<Home> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => TimetableForm(
-                timeTable: tt,
-                entryToEdit: entry,
-                courseName: course,
-                teacherName: teacher,
-              ),
+              builder:
+                  (_) => TimetableForm(
+                    timeTable: tt,
+                    entryToEdit: entry,
+                    courseName: course,
+                    teacherName: teacher,
+                  ),
             ),
           );
         },
@@ -103,48 +104,75 @@ class _HomeState extends State<Home> {
 
   Widget _buildETA(TimetableEntry entry) {
     return StreamBuilder<DateTime>(
-      stream: Stream.periodic(const Duration(seconds: 30), (_) => DateTime.now()),
+      stream: Stream.periodic(
+        const Duration(seconds: 30),
+        (_) => DateTime.now(),
+      ),
       initialData: DateTime.now(),
       builder: (context, snapshot) {
         final now = snapshot.data!;
-        
-        final List<String> weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+        final List<String> weekDays = [
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+          'Saturday',
+          'Sunday',
+        ];
         final int currentDayIndex = now.weekday - 1;
-        final int currentMin = currentDayIndex * 24 * 60 + now.hour * 60 + now.minute;
-        
+        final int currentMin =
+            currentDayIndex * 24 * 60 + now.hour * 60 + now.minute;
+
         final int classDayIndex = weekDays.indexOf(entry.day);
         if (classDayIndex == -1) return const SizedBox.shrink();
-        
+
         final int startMin = classDayIndex * 24 * 60 + entry.startTime;
-        final int endMin = classDayIndex * 24 * 60 + entry.endTime;
-        
+        int endMin = classDayIndex * 24 * 60 + entry.endTime;
+        if (endMin < startMin) endMin += 24 * 60; // Crosses midnight
+
+        const int week = 7 * 24 * 60;
+
         // Calculate minutes until start, handling weekly wrap-around
         int untilStart = startMin - currentMin;
-        if (untilStart < 0) untilStart += 7 * 24 * 60;
-        
-        bool isNow = false;
-        int untilEnd = 0;
-        
-        if (currentMin >= startMin && currentMin < endMin) {
-          isNow = true;
-          untilEnd = endMin - currentMin;
-        }
+        if (untilStart < 0) untilStart += week;
+
+        // Check if currently in session
+        final int duration = endMin - startMin;
+        int timeSinceStart = (currentMin - startMin) % week;
+        if (timeSinceStart < 0) timeSinceStart += week;
+
+        bool isNow = timeSinceStart < duration;
+        int untilEnd = isNow ? (duration - timeSinceStart) : 0;
 
         if (untilStart > 0 && untilStart <= 60) {
           return Text(
             'Starts in $untilStart min',
-            style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.green,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
           );
         } else if (isNow) {
           if (untilEnd <= 60) {
             return Text(
               'Ends in $untilEnd min',
-              style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             );
           } else {
             return const Text(
               'NOW',
-              style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             );
           }
         }
@@ -188,18 +216,21 @@ class _HomeState extends State<Home> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.settings),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  ),
+                  onPressed:
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      ),
                 ),
               ],
             ),
             body: Column(
               children: [
                 WidgetGitReleaseChecker(
-                  user: 'Holy-Warrior',
-                  repo: 'timetable-management',
+                  user: githubUserName,
+                  repo: githubRepoName,
                   currentRelease: currentRelease,
                   filterOutPreRelease: false,
                   showLoading: false,
@@ -209,9 +240,16 @@ class _HomeState extends State<Home> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.event_busy, size: 64, color: Colors.grey.withValues(alpha: 0.5)),
+                        Icon(
+                          Icons.event_busy,
+                          size: 64,
+                          color: Colors.grey.withValues(alpha: 0.5),
+                        ),
                         const SizedBox(height: 16),
-                        const Text('No classes scheduled', style: TextStyle(color: Colors.grey)),
+                        const Text(
+                          'No classes scheduled',
+                          style: TextStyle(color: Colors.grey),
+                        ),
                       ],
                     ),
                   ),
@@ -224,9 +262,20 @@ class _HomeState extends State<Home> {
 
         // Try to set the initial tab to today if it exists, otherwise use 0
         final todayIndex = DateTime.now().weekday - 1;
-        final List<String> allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        final List<String> allDays = [
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+          'Saturday',
+          'Sunday',
+        ];
         final todayName = allDays[todayIndex];
-        final initialIndex = availableDays.contains(todayName) ? availableDays.indexOf(todayName) : 0;
+        final initialIndex =
+            availableDays.contains(todayName)
+                ? availableDays.indexOf(todayName)
+                : 0;
 
         return DefaultTabController(
           length: availableDays.length,
@@ -238,10 +287,13 @@ class _HomeState extends State<Home> {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.settings),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  ),
+                  onPressed:
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      ),
                 ),
               ],
               bottom: TabBar(
@@ -254,22 +306,25 @@ class _HomeState extends State<Home> {
             body: Column(
               children: [
                 WidgetGitReleaseChecker(
-                  user: 'Holy-Warrior',
-                  repo: 'timetable-management',
+                  user: githubUserName,
+                  repo: githubRepoName,
                   currentRelease: currentRelease,
                   filterOutPreRelease: false,
                   showLoading: false,
                 ),
                 Expanded(
                   child: TabBarView(
-                    children: availableDays.map((day) {
-                      final entries = tt.getEntriesByDay(day);
-                      return ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: entries.length,
-                        itemBuilder: (context, index) => _buildCourseCard(context, entries[index]),
-                      );
-                    }).toList(),
+                    children:
+                        availableDays.map((day) {
+                          final entries = tt.getEntriesByDay(day);
+                          return ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: entries.length,
+                            itemBuilder:
+                                (context, index) =>
+                                    _buildCourseCard(context, entries[index]),
+                          );
+                        }).toList(),
                   ),
                 ),
               ],
