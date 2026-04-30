@@ -1,243 +1,211 @@
+import 'package:flutter/material.dart';
+import 'package:timetable/models/timetable_model.dart';
 import 'package:timetable/shared_memory.dart';
+import 'package:timetable/services/notification_service.dart';
 
-class TimeTable {
-  late List<Map<String, dynamic>> table;
+class TimeTable extends ChangeNotifier {
+  List<Course> _courses = [];
   String status = 'loading';
-  late Function callback;
+  bool _notificationsEnabled = true;
+  int _notificationOffset = 10;
 
-  TimeTable(this.callback) {
-    _loadData().then((_) => callback());
+  List<Course> get courses => _courses;
+  bool get notificationsEnabled => _notificationsEnabled;
+  int get notificationOffset => _notificationOffset;
+
+  TimeTable() {
+    _loadData();
   }
 
   Future<void> _loadData() async {
-    /*
-      I fucking hate dart's typecasting! 
-      It makes me focus on things i shouldn't
-      be focusing on. I just want to get the 
-      data and use it, not worry about.
-    */
-    dynamic data = await sharedMemory('savedTimeTable', null, true);
-    if (data != null) {
-      table =
-          (data as List).map((e) {
-            final map = Map<String, dynamic>.from(e);
-            map['entries'] =
-                (map['entries'] as List)
-                    .map((entry) => Map<String, dynamic>.from(entry))
-                    .toList();
-            return map;
-          }).toList();
-      status = 'ready';
+    status = 'loading';
+    notifyListeners();
+
+    final dynamic data = await sharedMemory('savedTimeTable', null, true);
+    if (data != null && data is List) {
+      _courses = data.map((e) => Course.fromJson(Map<String, dynamic>.from(e))).toList();
+      status = _courses.isEmpty ? 'empty' : 'ready';
     } else {
-      table = [];
+      _courses = [];
       status = 'empty';
     }
+
+    final notifs = await sharedMemory('notificationsEnabled');
+    _notificationsEnabled = notifs is bool ? notifs : true;
+
+    final offset = await sharedMemory('notificationOffset');
+    _notificationOffset = offset is int ? offset : 10;
+
+    notifyListeners();
   }
 
   Future<void> _saveData() async {
-    status = 'ready';
-    await sharedMemory('savedTimeTable', table, true);
+    await sharedMemory('savedTimeTable', _courses.map((c) => c.toJson()).toList(), true);
   }
 
-  void addEntry(
-    String course,
-    String teacher,
-    String day,
-    String room,
-    int startTime,
-    int endTime,
-    String color,
-  ) async {
-    final id = getTableId(course, teacher);
-
-    final entries = {
-      "day": day,
-      "room": room,
-      "startTime": startTime,
-      "endTime": endTime,
-      "color": color,
-    };
-
-    if (id >= 0) {
-      if (hasEntryValue(id, entries)) return;
-      table[id]['entries'].add(entries);
-    } else {
-      table.add({
-        "course": course,
-        "teacher": teacher,
-        "entries": [entries],
-      });
-    }
-    _saveData();
-    callback();
+  Future<void> toggleNotifications(bool value) async {
+    _notificationsEnabled = value;
+    await sharedMemory('notificationsEnabled', value);
+    _rescheduleAllNotifications();
+    notifyListeners();
   }
 
-  int getTableId(String course, String teacher) {
-    return table.indexWhere(
-      (entry) => entry['course'] == course && entry['teacher'] == teacher,
+  Future<void> setNotificationOffset(int offset) async {
+    _notificationOffset = offset;
+    await sharedMemory('notificationOffset', offset);
+    _rescheduleAllNotifications();
+    notifyListeners();
+  }
+
+  void addOrUpdateEntry({
+    required String courseName,
+    required String teacher,
+    required TimetableEntry entry,
+    String? entryIdToUpdate,
+  }) async {
+    final courseIndex = _courses.indexWhere(
+      (c) => c.name.toLowerCase() == courseName.toLowerCase() && 
+             c.teacher.toLowerCase() == teacher.toLowerCase()
     );
-  }
 
-  bool hasEntryValue(id, entries) {
-    return table[id]['entries'].every((value) => value == entries);
-  }
-
-  void deleteEntry(id, entryid) {
-    if (id < 0 || id >= table.length) return;
-    if (table[id]['entries'].singleOrNull != null) {
-      table.removeAt(id);
+    if (courseIndex >= 0) {
+      final entries = List<TimetableEntry>.from(_courses[courseIndex].entries);
+      if (entryIdToUpdate != null) {
+        final entryIndex = entries.indexWhere((e) => e.id == entryIdToUpdate);
+        if (entryIndex >= 0) {
+          entries[entryIndex] = entry;
+        } else {
+          entries.add(entry);
+        }
+      } else {
+        entries.add(entry);
+      }
+      
+      _courses[courseIndex] = Course(
+        name: courseName,
+        teacher: teacher,
+        entries: entries,
+      );
     } else {
-      table[id]['entries'].removeAt(entryid);
+      _courses.add(Course(
+        name: courseName,
+        teacher: teacher,
+        entries: [entry],
+      ));
     }
-    _saveData();
+
+    status = 'ready';
+    await _saveData();
+    _rescheduleAllNotifications();
+    notifyListeners();
   }
 
-  void deleteEntryByCourseAndTeacher(String course, String teacher, entryId) {
-    final id = getTableId(course, teacher);
-    if (id >= 0) {
-      if (table[id]['entries'].singleOrNull != null) {
-        table.removeAt(id);
-      } else if (entryId < table[id]['entries'].length) {
-        table[id]['entries'].removeAt(entryId);
-        _saveData();
+  void _rescheduleAllNotifications() async {
+    final service = NotificationService();
+    await service.cancelAllNotifications();
+    
+    if (!_notificationsEnabled) return;
+
+
+    final List<String> weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    
+    for (var course in _courses) {
+      for (var entry in course.entries) {
+        final dayIndex = weekDays.indexOf(entry.day) + 1;
+        
+        int classWeeklyMin = (dayIndex - 1) * 24 * 60 + entry.startTime;
+        int notifyWeeklyMin = classWeeklyMin - _notificationOffset;
+        if (notifyWeeklyMin < 0) notifyWeeklyMin += 7 * 24 * 60;
+        
+        int notifyDayIndex = (notifyWeeklyMin ~/ (24 * 60)) + 1;
+        int timeInDay = notifyWeeklyMin % (24 * 60);
+        int notifyHour = timeInDay ~/ 60;
+        int notifyMinute = timeInDay % 60;
+
+        await service.scheduleNotification(
+          id: entry.id.hashCode,
+          title: 'Upcoming Class: ${course.name}',
+          body: 'Room: ${entry.room} starts in $_notificationOffset minutes',
+          hour: notifyHour,
+          minute: notifyMinute,
+          dayOfWeek: notifyDayIndex,
+        );
       }
     }
   }
 
-  // ignore: unused_element
-  List<Map<String, dynamic>>? getEntriesByDayWithCourseAndTeacher(day) {
-    /*
-    returning data structure:
-    [{
-      'table id': 0,
-      'entry id': 0,
-      'course': 'Course Name',
-      'teacher': 'Teacher Name',
-      'day': 'Monday',
-      'room': 'Room 101',
-      'startTime': 9,
-      'endTime': 10,
-      'color': '#FF0000'
-    },
-    ...]
-    */
-    List<Map<String, dynamic>> results = [];
+  void deleteEntry(String courseName, String teacher, String entryId) async {
+    final courseIndex = _courses.indexWhere(
+      (c) => c.name == courseName && c.teacher == teacher
+    );
 
-    if (table.isEmpty) return null;
-    for (var course in table) {
-      if (course['entries'].isEmpty) return null;
-      for (var entry in course['entries']) {
-        if (entry['day'] == day) {
+    if (courseIndex >= 0) {
+      final entries = List<TimetableEntry>.from(_courses[courseIndex].entries);
+      entries.removeWhere((e) => e.id == entryId);
+
+      if (entries.isEmpty) {
+        _courses.removeAt(courseIndex);
+      } else {
+        _courses[courseIndex] = Course(
+          name: courseName,
+          teacher: teacher,
+          entries: entries,
+        );
+      }
+
+      if (_courses.isEmpty) status = 'empty';
+      await _saveData();
+      _rescheduleAllNotifications();
+      notifyListeners();
+    }
+  }
+
+  List<Map<String, dynamic>> getEntriesByDay(String day) {
+    List<Map<String, dynamic>> results = [];
+    for (var course in _courses) {
+      for (var entry in course.entries) {
+        if (entry.day == day) {
           results.add({
-            // formatting the data as one map
-            'table id': table.indexOf(course),
-            'entry id': course['entries'].indexOf(entry),
-            'course': course['course'],
-            'teacher': course['teacher'],
-            'day': entry['day'],
-            'room': entry['room'],
-            'startTime': entry['startTime'],
-            'endTime': entry['endTime'],
-            'color': entry['color'],
+            'course': course.name,
+            'teacher': course.teacher,
+            'entry': entry,
           });
         }
       }
     }
-    return results.isNotEmpty ? results : null;
+    // Sort by start time
+    results.sort((a, b) => (a['entry'] as TimetableEntry).startTime.compareTo((b['entry'] as TimetableEntry).startTime));
+    return results;
   }
 
-  List<String>? getAvailableDays() {
-    List<String> availableDays = [];
-    for (var entries in table) {
-      for (var entry in entries['entries']) {
-        if (!availableDays.contains(entry['day'])) {
-          availableDays.add(entry['day']);
-        }
+  List<String> getAvailableDays() {
+    final Set<String> days = {};
+    for (var course in _courses) {
+      for (var entry in course.entries) {
+        days.add(entry.day);
       }
     }
-    return availableDays.isNotEmpty ? availableDays : null;
+    final List<String> weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return weekDays.where((d) => days.contains(d)).toList();
   }
 
   Map<String, List<String>> getUniqueValues() {
-    final Map<String, List<String>> myMap = {
-      'course': [],
-      'teacher': [],
-      'day': [],
-      'room': [],
-      // 'startTime': [],
-      // 'endTime': [],
-      // 'color': [],
-    };
+    final Set<String> coursesSet = {};
+    final Set<String> teachersSet = {};
+    final Set<String> roomsSet = {};
 
-    for (var course in table) {
-      if (!myMap['course']!.contains(course['course'])) {
-        myMap['course']!.add(course['course']);
-      }
-      if (!myMap['teacher']!.contains(course['teacher'])) {
-        myMap['teacher']!.add(course['teacher']);
-      }
-      for (var entry in course['entries']) {
-        if (!myMap['day']!.contains(entry['day'])) {
-          myMap['day']!.add(entry['day']);
-        }
-        if (!myMap['room']!.contains(entry['room'])) {
-          myMap['room']!.add(entry['room']);
-        }
-        // if (!myMap['startTime']!.contains(entry['startTime'])) {
-        //   myMap['startTime']!.add(entry['startTime']);
-        // }
-        // if (!myMap['endTime']!.contains(entry['endTime'])) {
-        //   myMap['endTime']!.add(entry['endTime']);
-        // }
-        // if (!myMap['color']!.contains(entry['color'])) {
-        //   myMap['color']!.add(entry['color']);
-        // }
+    for (var course in _courses) {
+      coursesSet.add(course.name);
+      teachersSet.add(course.teacher);
+      for (var entry in course.entries) {
+        roomsSet.add(entry.room);
       }
     }
-    return myMap;
+
+    return {
+      'course': coursesSet.toList(),
+      'teacher': teachersSet.toList(),
+      'room': roomsSet.toList(),
+    };
   }
 }
-
-// the table structure is like this:
-// table = [
-//         {
-//             "course":"course name",
-//             "teacher":"teacher name",
-//             "entries":[
-//                 {
-//                     "day":"monday",
-//                     "room":"308",
-//                     "startTime":1719522780000,
-//                     "endTime":2719522780000,
-//                     "color":"#d4d4d4"
-//                 },
-//                 {
-//                     "day":"monday",
-//                     "room":"Lab 303",
-//                     "startTime":2719522780000,
-//                     "endTime":3719522780000,
-//                     "color":"#d4d4d4"
-//                 }
-//             ]
-//         },
-//         {
-//             "course":"course name",
-//             "teacher":"teacher name",
-//             "entries":[
-//                 {
-//                     "day":"monday",
-//                     "room":"308",
-//                     "startTime":1719522780000,
-//                     "endTime":2719522780000,
-//                     "color":"#d4d4d4"
-//                 },
-//                 {
-//                     "day":"monday",
-//                     "room":"Lab 303",
-//                     "startTime":2719522780000,
-//                     "endTime":3719522780000,
-//                     "color":"#d4d4d4"
-//                 }
-//             ]
-//         }
-//     ]

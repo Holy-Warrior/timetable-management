@@ -135,6 +135,9 @@ class _ComboboxFieldState extends State<ComboboxField> {
             focusNode: fieldFocusNode,
             decoration: InputDecoration(
               labelText: widget.label,
+              border: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
               suffixIcon: IconButton(
                 icon: const Icon(Icons.arrow_drop_down),
                 onPressed: () {

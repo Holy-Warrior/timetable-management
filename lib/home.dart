@@ -1,248 +1,283 @@
 import 'package:flutter/material.dart';
-import 'package:timetable/common_data.dart';
+import 'package:timetable/models/timetable_model.dart';
 import 'package:timetable/timetable_controller.dart';
 import 'package:timetable/timetable_form.dart';
 import 'package:timetable/widget_git_release_checker.dart';
+import 'package:timetable/common_data.dart';
+import 'package:timetable/settings_screen.dart';
+import 'package:provider/provider.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
 
   @override
-  State<Home> createState() => _StateHome();
+  State<Home> createState() => _HomeState();
 }
 
-class _StateHome extends State<Home> {
-  final List daysOfWeek = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
-  late final TimeTable timeTable;
-  String? selectedDay;
-  String status = 'loading';
-  List<Map<String, dynamic>>? selectedEntries;
-  bool refresh = false;
-
-  @override
-  void initState() {
-    super.initState();
-    selectedDay = getToday();
-    timeTable = TimeTable(() {
-      setState(() {
-        status = timeTable.status;
-        refresh = !refresh;
-      });
-    });
+class _HomeState extends State<Home> {
+  String _formatTime(int minutes) {
+    final hour = minutes ~/ 60;
+    final minute = minutes % 60;
+    final time = TimeOfDay(hour: hour, minute: minute);
+    return time.format(context);
   }
 
-  String getToday() {
-    final now = DateTime.now();
-    // DateTime.weekday returns 1 (Monday) to 7 (Sunday)
-    return daysOfWeek[now.weekday - 1];
-  }
-
-  Widget weekDayNavigationBar() {
-    List<String>? dayList = timeTable.getAvailableDays();
-
-    if (dayList == null) {
-      return Text('');
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children:
-            dayList
-                .map(
-                  (day) => ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        selectedDay = day;
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          selectedDay == day
-                              ? Colors.blue[300]
-                              : Colors.grey[200],
-                    ),
-                    child: Text(
-                      day,
-                      style: TextStyle(
-                        color:
-                            selectedDay == day ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-      ),
-    );
-  }
-
-  Widget courseEntry(entry) {
-    String formatTime(dynamic value) {
-      if (value is int) {
-        final hour = value ~/ 60;
-        final minute = value % 60;
-        final time = TimeOfDay(hour: hour, minute: minute);
-        return time.format(context);
-      } else if (value is String && int.tryParse(value) != null) {
-        final intVal = int.parse(value);
-        final hour = intVal ~/ 60;
-        final minute = intVal % 60;
-        final time = TimeOfDay(hour: hour, minute: minute);
-        return time.format(context);
-      }
-      return value.toString();
-    }
-
-    Widget etaWidget(entry) {
-      int? start =
-          entry['startTime'] is int
-              ? entry['startTime']
-              : int.tryParse(entry['startTime'].toString());
-      int? end =
-          entry['endTime'] is int
-              ? entry['endTime']
-              : int.tryParse(entry['endTime'].toString());
-      if (start == null || end == null) return SizedBox.shrink();
-      return StreamBuilder<DateTime>(
-        stream: Stream.periodic(
-          const Duration(seconds: 30),
-          (_) => DateTime.now(),
-        ),
-        initialData: DateTime.now(),
-        builder: (context, snapshot) {
-          final now = snapshot.data!;
-          final nowMinutes = now.hour * 60 + now.minute;
-          final untilStart = start - nowMinutes;
-          final untilEnd = end - nowMinutes;
-          if (untilStart > 0 && untilStart <= 60) {
-            // 60 min or less to start
-            return Text(
-              'ETA: $untilStart min',
-              style: TextStyle(
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-              ),
-            );
-          } else if (untilStart <= 0 && untilEnd > 0 && untilEnd <= 60) {
-            // 60 min or less to end
-            return Text(
-              'ETA: $untilEnd min',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            );
-          } else if (untilStart > -60 && untilStart < 0) {
-            // Under 60 min have passed since start
-            return Text(
-              'ETA: ...',
-              style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
-            );
-          } else {
-            return SizedBox.shrink();
-          }
-        },
-      );
-    }
+  Widget _buildCourseCard(BuildContext context, Map<String, dynamic> data) {
+    final String course = data['course'];
+    final String teacher = data['teacher'];
+    final TimetableEntry entry = data['entry'];
+    final tt = context.read<TimeTable>();
 
     return Card(
-      child: ListTile(
-        title: Text(entry['course']),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Teacher: ${entry['teacher']}'),
-            Text('Room: ${entry['room']}'),
-            Row(
-              children: [
-                Text(
-                  'Time: ${formatTime(entry['startTime'])} - ${formatTime(entry['endTime'])}',
-                ),
-                const SizedBox(width: 8),
-                etaWidget(entry),
-              ],
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TimetableForm(
+                timeTable: tt,
+                entryToEdit: entry,
+                courseName: course,
+                teacherName: teacher,
+              ),
             ),
-          ],
-        ),
-        trailing: Container(
-          width: 10,
-          height: 50,
-          color: Color(
-            int.parse(entry['color'].substring(1, 7), radix: 16) + 0xFF000000,
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: entry.color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      course,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Teacher: $teacher',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    Text(
+                      'Room: ${entry.room}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _formatTime(entry.startTime),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    _formatTime(entry.endTime),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  _buildETA(entry),
+                ],
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget floatingButton() {
-    return Align(
-      alignment: Alignment.bottomRight,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 16, right: 16),
-        child: FloatingActionButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => TimetableForm(timeTable: timeTable),
-              ),
+  Widget _buildETA(TimetableEntry entry) {
+    return StreamBuilder<DateTime>(
+      stream: Stream.periodic(const Duration(seconds: 30), (_) => DateTime.now()),
+      initialData: DateTime.now(),
+      builder: (context, snapshot) {
+        final now = snapshot.data!;
+        
+        final List<String> weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        final int currentDayIndex = now.weekday - 1;
+        final int currentMin = currentDayIndex * 24 * 60 + now.hour * 60 + now.minute;
+        
+        final int classDayIndex = weekDays.indexOf(entry.day);
+        if (classDayIndex == -1) return const SizedBox.shrink();
+        
+        final int startMin = classDayIndex * 24 * 60 + entry.startTime;
+        final int endMin = classDayIndex * 24 * 60 + entry.endTime;
+        
+        // Calculate minutes until start, handling weekly wrap-around
+        int untilStart = startMin - currentMin;
+        if (untilStart < 0) untilStart += 7 * 24 * 60;
+        
+        bool isNow = false;
+        int untilEnd = 0;
+        
+        if (currentMin >= startMin && currentMin < endMin) {
+          isNow = true;
+          untilEnd = endMin - currentMin;
+        }
+
+        if (untilStart > 0 && untilStart <= 60) {
+          return Text(
+            'Starts in $untilStart min',
+            style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
+          );
+        } else if (isNow) {
+          if (untilEnd <= 60) {
+            return Text(
+              'Ends in $untilEnd min',
+              style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
             );
-          },
-          child: const Icon(Icons.add),
-        ),
-      ),
+          } else {
+            return const Text(
+              'NOW',
+              style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+            );
+          }
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildFAB(BuildContext context) {
+    return FloatingActionButton.extended(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TimetableForm(timeTable: context.read<TimeTable>()),
+          ),
+        );
+      },
+      label: const Text('Add Schedule'),
+      icon: const Icon(Icons.add),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (timeTable.status == 'loading') {
-      return Center(child: CircularProgressIndicator());
-    }
-    if (timeTable.status != 'empty') {
-      selectedEntries = timeTable.getEntriesByDayWithCourseAndTeacher(
-        selectedDay,
-      );
-    }
+    return Consumer<TimeTable>(
+      builder: (context, tt, _) {
+        if (tt.status == 'loading') {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-    return Stack(
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            WidgetGitReleaseChecker(
-              user: 'Holy-Warrior',
-              repo: 'timetable-management',
-              currentRelease: currentRelease,
-              filterOutPreRelease: false,
-              showLoading: false,
-            ),
-            if (timeTable.status == 'empty')
-              Center(child: Text('No timetable data yet.'))
-            else ...[
-              weekDayNavigationBar(),
-              if (selectedEntries != null)
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: selectedEntries?.length,
-                    itemBuilder: (context, index) {
-                      final entry = selectedEntries![index];
-                      return courseEntry(entry);
-                    },
+        final availableDays = tt.getAvailableDays();
+
+        if (availableDays.isEmpty) {
+          return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            appBar: AppBar(
+              title: const Text('My Schedule'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
                   ),
                 ),
-            ],
-          ],
-        ),
-        floatingButton(),
-      ],
+              ],
+            ),
+            body: Column(
+              children: [
+                WidgetGitReleaseChecker(
+                  user: 'Holy-Warrior',
+                  repo: 'timetable-management',
+                  currentRelease: currentRelease,
+                  filterOutPreRelease: false,
+                  showLoading: false,
+                ),
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.event_busy, size: 64, color: Colors.grey.withValues(alpha: 0.5)),
+                        const SizedBox(height: 16),
+                        const Text('No classes scheduled', style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            floatingActionButton: _buildFAB(context),
+          );
+        }
+
+        // Try to set the initial tab to today if it exists, otherwise use 0
+        final todayIndex = DateTime.now().weekday - 1;
+        final List<String> allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        final todayName = allDays[todayIndex];
+        final initialIndex = availableDays.contains(todayName) ? availableDays.indexOf(todayName) : 0;
+
+        return DefaultTabController(
+          length: availableDays.length,
+          initialIndex: initialIndex,
+          child: Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            appBar: AppBar(
+              title: const Text('My Schedule'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  ),
+                ),
+              ],
+              bottom: TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                indicatorSize: TabBarIndicatorSize.label,
+                tabs: availableDays.map((day) => Tab(text: day)).toList(),
+              ),
+            ),
+            body: Column(
+              children: [
+                WidgetGitReleaseChecker(
+                  user: 'Holy-Warrior',
+                  repo: 'timetable-management',
+                  currentRelease: currentRelease,
+                  filterOutPreRelease: false,
+                  showLoading: false,
+                ),
+                Expanded(
+                  child: TabBarView(
+                    children: availableDays.map((day) {
+                      final entries = tt.getEntriesByDay(day);
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: entries.length,
+                        itemBuilder: (context, index) => _buildCourseCard(context, entries[index]),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+            floatingActionButton: _buildFAB(context),
+          ),
+        );
+      },
     );
   }
 }

@@ -1,129 +1,142 @@
 import 'package:flutter/material.dart';
+import 'package:timetable/models/timetable_model.dart';
 import 'package:timetable/timetable_controller.dart';
 import 'package:timetable/widget_combo_field.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 class TimetableForm extends StatefulWidget {
   final TimeTable timeTable;
-  const TimetableForm({super.key, required this.timeTable});
+  final TimetableEntry? entryToEdit;
+  final String? courseName;
+  final String? teacherName;
+
+  const TimetableForm({
+    super.key, 
+    required this.timeTable, 
+    this.entryToEdit,
+    this.courseName,
+    this.teacherName,
+  });
 
   @override
   State<TimetableForm> createState() => _TimetableFormState();
 }
 
 class _TimetableFormState extends State<TimetableForm> {
-  Map<String, dynamic> selected = {};
-  Map<String, TextEditingController> controllers = {
-    'course': TextEditingController(),
-    'teacher': TextEditingController(),
-    'room': TextEditingController(),
-    'startTime': TextEditingController(),
-    'endTime': TextEditingController(),
-    'color': TextEditingController(),
-  };
-  final List<String> daysOfWeek = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _courseController;
+  late TextEditingController _teacherController;
+  late TextEditingController _roomController;
+  
+  String _selectedDay = 'Monday';
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+  Color _selectedColor = Colors.indigo;
+
+  final List<String> _daysOfWeek = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
   ];
-
-  Map<String, String> dropDownVariables = {'day': 'Monday'};
-
-  late final TimeTable tt;
-  late final Map<String, List<String>> options;
-
-  TimeOfDay? startTime;
-  TimeOfDay? endTime;
-
-  final Map<String, Color> colorOptions = {
-    'Red': Colors.red,
-    'Green': Colors.green,
-    'Blue': Colors.blue,
-    'Orange': Colors.orange,
-    'Purple': Colors.purple,
-    'Teal': Colors.teal,
-    'Amber': Colors.amber,
-    'Pink': Colors.pink,
-    'Brown': Colors.brown,
-  };
-  String selectedColorName = 'Red';
 
   @override
   void initState() {
     super.initState();
-
-    tt = widget.timeTable;
-    options = tt.getUniqueValues();
-  }
-
-  void onSave() {
-    String capitalize(String s) =>
-        s.isNotEmpty ? s[0].toUpperCase() + s.substring(1).toLowerCase() : s;
-
-    final course = capitalize(controllers['course']!.text.trim());
-    final teacher = capitalize(controllers['teacher']!.text.trim());
-    final room = capitalize(controllers['room']!.text.trim());
-    final int? startMinutes =
-        startTime != null ? startTime!.hour * 60 + startTime!.minute : null;
-    final int? endMinutes =
-        endTime != null ? endTime!.hour * 60 + endTime!.minute : null;
-    final color = colorOptions[selectedColorName]!;
-    final colorHex =
-        '#${color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
-
-    if (course.isNotEmpty &&
-        teacher.isNotEmpty &&
-        room.isNotEmpty &&
-        startMinutes != null &&
-        endMinutes != null) {
-      tt.addEntry(
-        course,
-        teacher,
-        dropDownVariables['day']!,
-        room,
-        startMinutes,
-        endMinutes,
-        colorHex,
+    _courseController = TextEditingController(text: widget.courseName ?? '');
+    _teacherController = TextEditingController(text: widget.teacherName ?? '');
+    _roomController = TextEditingController(text: widget.entryToEdit?.room ?? '');
+    
+    if (widget.entryToEdit != null) {
+      _selectedDay = widget.entryToEdit!.day;
+      _startTime = TimeOfDay(
+        hour: widget.entryToEdit!.startTime ~/ 60,
+        minute: widget.entryToEdit!.startTime % 60,
       );
-      Navigator.pop(context);
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Please fill all fields')));
+      _endTime = TimeOfDay(
+        hour: widget.entryToEdit!.endTime ~/ 60,
+        minute: widget.entryToEdit!.endTime % 60,
+      );
+      _selectedColor = widget.entryToEdit!.color;
     }
   }
 
-  Widget buildDropdown({
-    required String label,
-    required List<String> options,
-    required String selectedValue,
-  }) {
-    // adding label
-    return InputDecorator(
-      decoration: InputDecoration(labelText: label),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedValue,
-          items:
-              options.map((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-          onChanged: (String? newValue) {
-            setState(() {
-              if (label == 'Day') {
-                dropDownVariables['day'] = newValue!;
-              } else {
-                selected[label] = newValue!;
-                controllers[label]!.text = newValue;
-              }
-            });
-          },
+  @override
+  void dispose() {
+    _courseController.dispose();
+    _teacherController.dispose();
+    _roomController.dispose();
+    super.dispose();
+  }
+
+  void _onSave() {
+    if (_formKey.currentState!.validate() && _startTime != null && _endTime != null) {
+      final startMin = _startTime!.hour * 60 + _startTime!.minute;
+      final endMin = _endTime!.hour * 60 + _endTime!.minute;
+
+      if (endMin <= startMin) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('End time must be after start time')),
+        );
+        return;
+      }
+
+      final entry = TimetableEntry(
+        id: widget.entryToEdit?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        day: _selectedDay,
+        room: _roomController.text.trim(),
+        startTime: startMin,
+        endTime: endMin,
+        color: _selectedColor,
+      );
+
+      widget.timeTable.addOrUpdateEntry(
+        courseName: _courseController.text.trim(),
+        teacher: _teacherController.text.trim(),
+        entry: entry,
+        entryIdToUpdate: widget.entryToEdit?.id,
+      );
+
+      Navigator.pop(context);
+    } else if (_startTime == null || _endTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select start and end times')),
+      );
+    }
+  }
+
+  void _onDelete() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Class?'),
+        content: const Text('Are you sure you want to remove this class from your schedule?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              widget.timeTable.deleteEntry(widget.courseName!, widget.teacherName!, widget.entryToEdit!.id);
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Close form
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickColor() async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pick a color'),
+        content: SingleChildScrollView(
+          child: BlockPicker(
+            pickerColor: _selectedColor,
+            onColorChanged: (color) {
+              setState(() => _selectedColor = color);
+              Navigator.pop(context);
+            },
+          ),
         ),
       ),
     );
@@ -131,122 +144,139 @@ class _TimetableFormState extends State<TimetableForm> {
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.entryToEdit != null;
+    final options = widget.timeTable.getUniqueValues();
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Timetable Entry')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          spacing: 4.0,
-          children: [
-            ComboboxField(
-              label: 'Course',
-              controller: controllers['course']!,
-              options: options['course']!,
+      appBar: AppBar(
+        title: Text(isEditing ? 'Edit Class' : 'Add New Class'),
+        actions: [
+          if (isEditing)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: _onDelete,
             ),
-            ComboboxField(
-              label: 'Teacher',
-              controller: controllers['teacher']!,
-              options: options['teacher']!,
-            ),
-            buildDropdown(
-              label: 'Day',
-              options: daysOfWeek,
-              selectedValue: dropDownVariables['day']!,
-            ),
-            ComboboxField(
-              label: 'Room',
-              controller: controllers['room']!,
-              options: options['room']!,
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: startTime ?? TimeOfDay(hour: 8, minute: 0),
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          startTime = picked;
-                        });
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: InputDecoration(labelText: 'Start Time'),
-                      child: Text(
-                        startTime != null
-                            ? startTime!.format(context)
-                            : 'Select Time',
-                      ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ComboboxField(
+                label: 'Course Name',
+                controller: _courseController,
+                options: options['course'] ?? [],
+              ),
+              const SizedBox(height: 16),
+              ComboboxField(
+                label: 'Teacher Name',
+                controller: _teacherController,
+                options: options['teacher'] ?? [],
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedDay,
+                decoration: const InputDecoration(
+                  labelText: 'Day of Week',
+                  border: OutlineInputBorder(),
+                ),
+                items: _daysOfWeek.map((day) => DropdownMenuItem(value: day, child: Text(day))).toList(),
+                onChanged: (val) => setState(() => _selectedDay = val!),
+              ),
+              const SizedBox(height: 16),
+              ComboboxField(
+                label: 'Room / Location',
+                controller: _roomController,
+                options: options['room'] ?? [],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _TimePickerField(
+                      label: 'Start Time',
+                      time: _startTime,
+                      onTap: () async {
+                        final picked = await showTimePicker(context: context, initialTime: _startTime ?? const TimeOfDay(hour: 9, minute: 0));
+                        if (picked != null) setState(() => _startTime = picked);
+                      },
                     ),
                   ),
-                ),
-                SizedBox(width: 8.0),
-                Expanded(
-                  child: InkWell(
-                    onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: endTime ?? TimeOfDay(hour: 9, minute: 0),
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          endTime = picked;
-                        });
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: InputDecoration(labelText: 'End Time'),
-                      child: Text(
-                        endTime != null
-                            ? endTime!.format(context)
-                            : 'Select Time',
-                      ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _TimePickerField(
+                      label: 'End Time',
+                      time: _endTime,
+                      onTap: () async {
+                        final picked = await showTimePicker(context: context, initialTime: _endTime ?? const TimeOfDay(hour: 10, minute: 0));
+                        if (picked != null) setState(() => _endTime = picked);
+                      },
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              ListTile(
+                title: const Text('Theme Color'),
+                subtitle: const Text('Pick a color for this course'),
+                trailing: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: _selectedColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black12),
+                  ),
                 ),
-              ],
-            ),
-            SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: selectedColorName,
-              decoration: const InputDecoration(labelText: 'Color'),
-              items:
-                  colorOptions.entries.map((entry) {
-                    return DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: entry.value,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.black12),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(entry.key),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-              onChanged: (colorName) {
-                setState(() {
-                  selectedColorName = colorName!;
-                });
-              },
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: onSave,
-              style: ElevatedButton.styleFrom(minimumSize: Size.fromHeight(48)),
-              child: const Text('Save'),
-            ),
-          ],
+                onTap: _pickColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
+                ),
+              ),
+              const SizedBox(height: 40),
+              ElevatedButton(
+                onPressed: _onSave,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(isEditing ? 'Update Schedule' : 'Save to Schedule', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TimePickerField extends StatelessWidget {
+  final String label;
+  final TimeOfDay? time;
+  final VoidCallback onTap;
+
+  const _TimePickerField({required this.label, required this.time, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+        child: Text(
+          time != null ? time!.format(context) : 'Select',
+          style: const TextStyle(fontSize: 16),
         ),
       ),
     );
