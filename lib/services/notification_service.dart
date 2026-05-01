@@ -16,11 +16,6 @@ class NotificationService {
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       final tzInfo = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
-      
-      final androidPlugin = _notificationsPlugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.requestExactAlarmsPermission();
-      await androidPlugin?.requestNotificationsPermission();
     }
     
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -44,6 +39,15 @@ class NotificationService {
         // Handle notification tap
       },
     );
+  }
+
+  Future<void> requestPermissions() async {
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      final androidPlugin = _notificationsPlugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.requestExactAlarmsPermission();
+      await androidPlugin?.requestNotificationsPermission();
+    }
   }
 
   Future<void> scheduleNotification({

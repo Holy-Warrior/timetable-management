@@ -1,14 +1,60 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:timetable/models/timetable_model.dart';
 import 'package:timetable/timetable_controller.dart';
 import 'package:timetable/timetable_form.dart';
 import 'package:timetable/widget_git_release_checker.dart';
 import 'package:timetable/common_data.dart';
 import 'package:timetable/settings_screen.dart';
-import 'package:provider/provider.dart';
 
-class Home extends StatelessWidget {
+class Home extends StatefulWidget {
   const Home({super.key});
+
+  @override
+  State<Home> createState() => _HomeState();
+}
+
+class _HomeState extends State<Home> {
+  static const _channel = MethodChannel('com.example.timetable/intent');
+
+  @override
+  void initState() {
+    super.initState();
+    _initIntentHandling();
+  }
+
+  Future<void> _initIntentHandling() async {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == "onNewIntent") {
+        final String? content = call.arguments;
+        if (content != null) {
+          _handleImport(content);
+        }
+      }
+    });
+
+    final String? initialContent = await _channel.invokeMethod('getInitialIntent');
+    if (initialContent != null) {
+      _handleImport(initialContent);
+    }
+  }
+
+  void _handleImport(String content) async {
+    try {
+      final tt = Provider.of<TimeTable>(context, listen: false);
+      await tt.importData(content);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Schedules imported successfully!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to import schedules.')),
+      );
+    }
+  }
 
   String _formatTime(BuildContext context, int minutes) {
     final hour = minutes ~/ 60;

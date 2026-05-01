@@ -78,7 +78,34 @@ class TimeTable extends ChangeNotifier {
     try {
       final dynamic data = jsonDecode(jsonString);
       if (data is List) {
-        _courses = data.map((e) => Course.fromJson(Map<String, dynamic>.from(e))).toList();
+        final List<Course> importedCourses = data.map((e) => Course.fromJson(Map<String, dynamic>.from(e))).toList();
+        
+        for (var importedCourse in importedCourses) {
+          final existingCourseIndex = _courses.indexWhere(
+            (c) => c.name.toLowerCase() == importedCourse.name.toLowerCase() && 
+                   c.teacher.toLowerCase() == importedCourse.teacher.toLowerCase()
+          );
+
+          if (existingCourseIndex != -1) {
+            // Merge entries into existing course
+            final existingCourse = _courses[existingCourseIndex];
+            for (var importedEntry in importedCourse.entries) {
+              // Avoid duplicates in the same course
+              final isDuplicate = existingCourse.entries.any((e) => 
+                e.day == importedEntry.day && 
+                e.startTime == importedEntry.startTime && 
+                e.endTime == importedEntry.endTime
+              );
+              if (!isDuplicate) {
+                existingCourse.entries.add(importedEntry);
+              }
+            }
+          } else {
+            // Add as new course
+            _courses.add(importedCourse);
+          }
+        }
+
         status = _courses.isEmpty ? 'empty' : 'ready';
         await _saveData();
         _rescheduleAllNotifications();
